@@ -230,7 +230,7 @@ pre.py .f{color:#fff;text-decoration:underline}
 .k.sug{flex:0 0 auto;padding:0 13px;font-size:15px;background:#fff;box-shadow:inset 0 0 0 1.5px #000;font-weight:800;position:relative}
 .k.sug.hasvar::after{content:'';position:absolute;right:4px;top:4px;width:5px;height:5px;border-radius:50%;background:#000}
 .k.sug.hot{background:#000;color:#fff}
-#smartRow{flex:1 1 0;min-width:0;margin:0;overflow-x:auto;scrollbar-width:none}
+#smartRow{position:relative;flex:1 1 0;min-width:0;margin:0;overflow-x:auto;scrollbar-width:none}
 #smartRow::-webkit-scrollbar{display:none}
 .varpop{position:fixed;z-index:70;background:#000;color:#fff;border-radius:14px;padding:6px;display:flex;flex-direction:column;gap:2px;box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:92vw}
 .varpop button{color:#fff;text-align:left;padding:10px 14px;font-family:var(--mono);font-size:14px;font-weight:700;white-space:pre;border-radius:10px}
@@ -243,6 +243,33 @@ pre.py .f{color:#fff;text-decoration:underline}
 #runSt{font-size:14px;font-weight:700;color:var(--mut);margin:2px 0 8px}
 #runOut{min-height:90px;white-space:pre-wrap;word-break:break-word;font-size:14px;margin:0 0 12px}
 .rbtns{display:flex;gap:10px}.rbtns .btn{flex:1}
+
+/* ===== compact keyboard v2 ===== */
+body.typing #toast{width:max-content;bottom:auto;top:calc(64px + env(safe-area-inset-top,0px));font-size:14px;padding:9px 16px}
+#sType .tbar{padding:8px 12px 4px;min-height:46px;gap:6px}
+#sType .tbar .back,#sType .tbar .ttl{white-space:nowrap}
+#sType .tbar .back{font-size:15px;padding:8px 4px}
+#sType .tbar .ttl{font-size:16px;margin-right:auto}
+#sType .tbar .act{gap:4px}
+#sType .tbar .act button{min-width:38px;height:36px;font-size:17px;border-radius:11px}
+#bRun{display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;padding:0 13px!important;height:36px!important;font-size:15px!important}
+.tmpl{padding:0 12px 6px}
+.tmpl button{padding:6px 14px;font-size:14px}
+#kb{padding:5px 4px calc(5px + env(safe-area-inset-bottom,0px))}
+.krow{gap:4px;margin-bottom:4px}
+.k{height:36px;border-radius:8px;font-size:16px}
+.k.fn{font-size:13px}
+.k.enter{font-size:18px}
+.smartwrap{display:flex;gap:4px;margin-bottom:4px;align-items:flex-start}
+.smartbtns{display:flex;flex-direction:column;gap:4px;flex:0 0 84px}
+.smartbtns .k{flex:none;height:28px;font-size:13px;padding:0;font-family:var(--sans);font-weight:800}
+.smartbtns .k.hidek{background:#cfcfcf;color:#000}
+#smartRow{position:relative;flex:1 1 0;min-width:0;display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px;max-height:60px;overflow:hidden;margin:0}
+#smartRow.open{max-height:124px;overflow-y:auto}
+.k.sug{flex:0 0 auto;height:28px;font-size:13px;padding:0 9px;border-radius:8px}
+.k.sug.more{background:#000;color:#fff;box-shadow:none;font-family:var(--sans)}
+.k.sug.hasvar::after{right:3px;top:3px;width:4px;height:4px}
+.k.layer{font-family:var(--sans);font-size:13px;font-weight:800}
 </style>
 </head>
 <body>
@@ -876,7 +903,7 @@ function go(name){
   $('#nType').classList.toggle('on', name === 'type');
   if (name === 'detail') { renderDetail(); $('#dScroll').scrollTop = 0; }
   updateKb();
-  if (name === 'type' && !hintShown) { hintShown = true; toast("Python can't run here. Type, then compare with the solution."); }
+  if (name === 'type' && !hintShown) { hintShown = true; toast('Tip: tap ▶ Run to run your code. Long-press a dotted word for quick versions.'); }
 }
 
 /* ---------- visuals ---------- */
@@ -1316,17 +1343,30 @@ function smartList(pre){
   const pool = SEED.concat(Object.keys(ids)).filter(w => w.toLowerCase().startsWith(p) && w !== pre);
   return [...new Set(pool)].sort((a, b) => (score(b) + (ids[b] || 0) * 0.3) - (score(a) + (ids[a] || 0) * 0.3)).slice(0, 14);
 }
+let smartOpen = false, layer = 'abc';
 function updateSmart(){
   const row = document.getElementById('smartRow'); if (!row || kb.hidden) return;
-  const pre = curPrefix(), sig = pre ? pre + '|' + ed.value.length : '|' + learnVer;
+  const pre = curPrefix(), sig = (pre ? pre + '|' + ed.value.length : '|' + learnVer) + (smartOpen ? 'o' : 'c') + layer;
   if (sig === smartSig) return; smartSig = sig;
   let list = smartList(pre), hot = !!pre && list.length > 0;
   if (!list.length) { list = smartList(''); hot = false; }
+  list = list.slice(0, 40);
+  row.classList.toggle('open', smartOpen);
   row.innerHTML = list.map((n, i) => {
     const w = WT[n] || {k: 'id'}, lab = w.k === 'f' ? n + '()' : (w.k === 'm' && !pre ? '.' + n + '()' : (w.k === 'm' ? n + '()' : n));
     return `<button class="k sug ${w.v ? 'hasvar' : ''} ${hot && i === 0 ? 'hot' : ''}" data-w="${esc(n)}">${esc(lab)}</button>`;
   }).join('');
-  row.scrollLeft = 0;
+  row.scrollTop = 0;
+  const mk = txt => { const m = document.createElement('button'); m.className = 'k sug more'; m.dataset.f = 'more'; m.textContent = txt; return m; };
+  if (smartOpen) { row.insertBefore(mk('▴ less'), row.firstChild); return; }
+  const lim = row.clientHeight; if (!lim) return;
+  const kids = [...row.children], fh = kids.findIndex(c => c.offsetTop + c.offsetHeight > lim + 1);
+  if (fh >= 0) {
+    for (let i = fh; i < kids.length; i++) kids[i].style.display = 'none';
+    const m = mk('⋯ more'); row.appendChild(m);
+    let i = fh - 1;
+    while (i > 0 && m.offsetTop + m.offsetHeight > lim + 1) { kids[i].style.display = 'none'; i--; }
+  }
 }
 function applyWord(n){
   const w = WT[n] || {k: 'id'}, pre = curPrefix(); let ins, back = 0;
@@ -1385,19 +1425,27 @@ document.addEventListener('pointerdown', e => { if (varPop && !varPop.contains(e
 function buildKb(){
   const key = (label, data, cls = '') => `<button class="k ${cls}" data-k="${esc(data)}">${esc(label)}</button>`;
   const letters = r => [...r].map(c => `<button class="k letter" data-k="${c}">${shift ? c.toUpperCase() : c}</button>`).join('');
-  let h = '<div class="krow"><button class="k chip2" data-f="hidekb" aria-label="Hide keyboard">⌄</button><button class="k snip" data-f="snips">⚡ Snippets</button><div id="smartRow" class="krow"></div></div>';
-  h += '<div class="krow scroll">' + CHIPS.map(c => `<button class="k chip2" data-ins="${esc(c[1])}" data-back="${typeof c[2] === 'number' ? c[2] : 0}">${esc(c[0])}</button>`).join('') + '</div>';
-  h += '<div class="krow">' + [...'()[]{}:,._'].map(c => key(c, c, 'sym')).join('') + '</div>';
-  h += '<div class="krow">' + [...'=+-*/%<>!#'].map(c => key(c, c, 'sym')).join('') + '</div>';
-  h += '<div class="krow">' + [...'1234567890'].map(c => key(c, c, 'sym')).join('') + '</div>';
-  h += '<div class="krow">' + letters('qwertyuiop') + '</div>';
-  h += '<div class="krow"><span style="flex:.5"></span>' + letters('asdfghjkl') + '<span style="flex:.5"></span></div>';
-  h += '<div class="krow"><button class="k fn w15 ' + (shift ? 'act' : '') + '" data-f="shift">' + (shift === 2 ? '⇪' : '⇧') + '</button>' + letters('zxcvbnm') + '<button class="k fn w15" data-f="bs" aria-label="Backspace">⌫</button></div>';
-  h += '<div class="krow"><button class="k fn w15" data-f="tab">Tab</button><button class="k fn" data-f="left" aria-label="Left">◀</button><button class="k fn" data-f="up" aria-label="Up">▲</button><button class="k w4" data-k=" ">space</button><button class="k fn" data-f="down" aria-label="Down">▼</button><button class="k fn" data-f="right" aria-label="Right">▶</button><button class="k enter w15" data-f="enter">Enter ⏎</button></div>';
+  const syms = (r, cls = 'sym') => '<div class="krow">' + [...r].map(c => key(c, c, cls)).join('') + '</div>';
+  let h = '<div class="smartwrap"><div class="smartbtns"><button class="k snip" data-f="snips">⚡ Snippets</button><button class="k hidek" data-f="hidekb" aria-label="Hide keyboard">⌄ Hide</button></div><div id="smartRow"></div></div>';
+  if (layer === 'abc') {
+    h += syms('()[]:,.="\'_');
+    h += '<div class="krow">' + letters('qwertyuiop') + '</div>';
+    h += '<div class="krow"><span style="flex:.5"></span>' + letters('asdfghjkl') + '<span style="flex:.5"></span></div>';
+    h += '<div class="krow"><button class="k fn w15 ' + (shift ? 'act' : '') + '" data-f="shift">' + (shift === 2 ? '⇪' : '⇧') + '</button>' + letters('zxcvbnm') + '<button class="k fn w15" data-f="bs" aria-label="Backspace">⌫</button></div>';
+  } else {
+    h += syms('1234567890');
+    h += syms('()[]{}:,._');
+    h += syms('=+-*/%<>!#');
+    h += '<div class="krow">' + [...'"\'\\&|^~@;?'].map(c => key(c, c, 'sym')).join('') + '</div>';
+    h = h.replace(/<div class="krow">(<button class="k sym" data-k="1">)/, '<div class="krow">$1');
+  }
+  const bottom = '<div class="krow"><button class="k fn layer" data-f="layer" style="flex:1.4">' + (layer === 'abc' ? '123' : 'ABC') + '</button><button class="k fn" data-f="tab" style="flex:1.1">Tab</button><button class="k fn" data-f="left" aria-label="Left">◀</button><button class="k fn" data-f="up" aria-label="Up">▲</button><button class="k w4" data-k=" " style="flex:3">space</button><button class="k fn" data-f="down" aria-label="Down">▼</button><button class="k fn" data-f="right" aria-label="Right">▶</button>' + (layer === 'sym' ? '<button class="k fn" data-f="bs" aria-label="Backspace">⌫</button>' : '') + '<button class="k enter" data-f="enter" style="flex:1.3" aria-label="Enter">⏎</button></div>';
+  h += bottom;
   kb.innerHTML = h; smartSig = ''; updateSmart();
 }
 function updateKb(){
   const onType = state.screen === 'type';
+  document.body.classList.toggle('typing', onType);
   kb.hidden = !(onType && useCustom && !kbHidden);
   $('#kbShow').hidden = !(onType && useCustom && kbHidden);
   if (!kb.hidden && !kb.dataset.built) { buildKb(); kb.dataset.built = '1'; }
@@ -1435,6 +1483,8 @@ kb.addEventListener('click', e => {
   }
   else if (f === 'hidekb') { kbHidden = true; updateKb(); }
   else if (f === 'snips') openSnips();
+  else if (f === 'more') { smartOpen = !smartOpen; smartSig = ''; updateSmart(); }
+  else if (f === 'layer') { layer = layer === 'abc' ? 'sym' : 'abc'; buildKb(); }
   else if (f === 'tab') insert('    ');
   else if (f === 'enter') enter();
   else if (f === 'left') moveH(-1);
