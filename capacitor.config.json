@@ -1,7 +1,9 @@
 {
   "appId": "com.vignesh.patterncoach",
-  "appName": "Pattern Coach",
+  "appName": "OneDSA",
   "webDir": "www",
-  "server": { "androidScheme": "https" },
+  "server": {
+    "androidScheme": "https"
+  },
   "backgroundColor": "#ffffff"
 }

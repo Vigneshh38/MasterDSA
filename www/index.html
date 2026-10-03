@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pattern Coach</title>
+<title>OneDSA</title>
 <style>
 :root{
   box-sizing:border-box;
@@ -223,6 +223,26 @@ pre.py .f{color:#fff;text-decoration:underline}
 .tn.ok span{background:#000;color:#fff;border-color:#000}
 .tn.dim span{opacity:.3}
 .tn.gap span{display:none}
+
+/* smart keyboard + run */
+#bRun{background:#000;color:#fff;border-radius:16px;padding:0 14px;font-weight:800;font-size:15px;width:auto;min-width:0;height:40px}
+.k.snip{flex:0 0 auto;background:#000;color:#fff;padding:0 12px;font-size:14px;font-family:var(--sans);font-weight:800}
+.k.sug{flex:0 0 auto;padding:0 13px;font-size:15px;background:#fff;box-shadow:inset 0 0 0 1.5px #000;font-weight:800;position:relative}
+.k.sug.hasvar::after{content:'';position:absolute;right:4px;top:4px;width:5px;height:5px;border-radius:50%;background:#000}
+.k.sug.hot{background:#000;color:#fff}
+#smartRow{flex:1 1 0;min-width:0;margin:0;overflow-x:auto;scrollbar-width:none}
+#smartRow::-webkit-scrollbar{display:none}
+.varpop{position:fixed;z-index:70;background:#000;color:#fff;border-radius:14px;padding:6px;display:flex;flex-direction:column;gap:2px;box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:92vw}
+.varpop button{color:#fff;text-align:left;padding:10px 14px;font-family:var(--mono);font-size:14px;font-weight:700;white-space:pre;border-radius:10px}
+.varpop button:active{background:#333}
+.varpop .vh{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#aaa;padding:4px 14px 2px;font-family:var(--sans)}
+.snipg{font-size:13px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--mut);margin:14px 4px 2px}
+.opt code.pv{display:block;font-family:var(--mono);font-size:12.5px;color:var(--mut);white-space:pre;font-weight:500;margin-top:2px}
+#runIn{width:100%;min-height:64px;border:2px solid var(--cell);border-radius:12px;padding:10px;font-family:var(--mono);font-size:14px;color:#000;background:#fff;resize:vertical;outline:none;margin:6px 0 10px}
+#runIn:focus{border-color:#000}
+#runSt{font-size:14px;font-weight:700;color:var(--mut);margin:2px 0 8px}
+#runOut{min-height:90px;white-space:pre-wrap;word-break:break-word;font-size:14px;margin:0 0 12px}
+.rbtns{display:flex;gap:10px}.rbtns .btn{flex:1}
 </style>
 </head>
 <body>
@@ -251,7 +271,7 @@ pre.py .f{color:#fff;text-decoration:underline}
     <div class="tbar">
       <button class="back" id="tBack">‹ Back</button>
       <span class="ttl">Code editor</span>
-      <div class="act"><button id="bUndo" aria-label="Undo">↶</button><button id="bRedo" aria-label="Redo">↷</button><button id="bMore" aria-label="More">⋯</button></div>
+      <div class="act"><button id="bRun" aria-label="Run code">▶ Run</button><button id="bUndo" aria-label="Undo">↶</button><button id="bRedo" aria-label="Redo">↷</button><button id="bMore" aria-label="More">⋯</button></div>
     </div>
     <div class="tmpl"><button id="tmplBtn">📄 <span id="tmplName" style="color:#000;font-size:14.5px;font-weight:700">Blank</span> ▾</button><span id="pos">Line 1, Col 1</span></div>
     <div class="edwrap">
@@ -1146,6 +1166,7 @@ function revealCaret(){
   else if (x + charW > ed.scrollLeft + ed.clientWidth - 24) ed.scrollLeft = x - ed.clientWidth + 48;
 }
 function updatePos(){
+  if (typeof updateSmart === 'function') updateSmart();
   const p = ed.selectionStart, v = ed.value;
   const ls = p === 0 ? 0 : v.lastIndexOf('\n', p - 1) + 1;
   $('#pos').textContent = 'Line ' + (v.slice(0, p).split('\n').length) + ', Col ' + (p - ls + 1);
@@ -1224,7 +1245,8 @@ $('#bMore').onclick = () => {
 $('#shB').addEventListener('click', e => {
   const b = e.target.closest('[data-sh]'); if (!b) return;
   const a = b.dataset.sh;
-  if (a === 'tmpl') { closeSheet(); const v = b.dataset.v; if (v === 'blank') loadText('', -1, 'Blank page. Tap ↶ to get your code back.'); else loadText(P[+v].starter, +v, 'Starter loaded. Tap ↶ to get your old code back.'); }
+  if (a === 'snip') { const tpl = flatSnip(+b.dataset.i); closeSheet(); insertTemplate(tpl); toast('Snippet added'); }
+  else if (a === 'tmpl') { closeSheet(); const v = b.dataset.v; if (v === 'blank') loadText('', -1, 'Blank page. Tap ↶ to get your code back.'); else loadText(P[+v].starter, +v, 'Starter loaded. Tap ↶ to get your old code back.'); }
   else if (a === 'sol') {
     const i = curTpl >= 0 ? curTpl : -1;
     if (i < 0) { toast('Pick a pattern first'); return; }
@@ -1247,16 +1269,124 @@ let shift = 0, lastShiftTap = 0;
 const CHIPS = [
   ['"','"'],["'","'"],['\\','\\'],['&','&'],['|','|'],['^','^'],['~','~'],['@','@'],[';',';'],['?','?'],
   ['()','()',1],['[]','[]',1],['{}','{}',1],['""','""',1],["''","''",1],
-  ['==','=='],['!=','!='],['<=','<='],['>=','>='],['+=','+='],['-=','-='],['//','//'],['**','**'],['->','->'],
-  ['def','def ','kwd'],['for','for ','kwd'],['in',' in ','kwd'],['range()','range()',1,'kwd'],['len()','len()',1,'kwd'],['while','while ','kwd'],['if','if ','kwd'],['elif','elif ','kwd'],['else:','else:','kwd'],['return','return ','kwd'],
-  ['not','not ','kwd'],['and',' and ','kwd'],['or',' or ','kwd'],['is None',' is None','kwd'],['None','None','kwd'],['True','True','kwd'],['False','False','kwd'],
-  ['print()','print()',1,'kwd'],['.append()','.append()',1,'kwd'],['self','self','kwd'],['pass','pass','kwd'],['break','break','kwd'],['continue','continue','kwd'],['import','import ','kwd'],['class','class ','kwd']
+  ['==','=='],['!=','!='],['<=','<='],['>=','>='],['+=','+='],['-=','-='],['//','//'],['**','**'],['->','->']
 ];
+
+/* Smart row: the words you use most come first, and typing a few letters shows matching words.
+   Long-press a word with a dot to get ready-made versions (for example for -> for i in range). */
+const WT = {
+  print:{k:'f',v:['print(¦)','print(f"¦")','print(¦, end="")']},
+  len:{k:'f'}, range:{k:'f',v:['range(¦)','range(len(¦))','range(¦, )','range(¦, -1, -1)']},
+  enumerate:{k:'f'}, sorted:{k:'f'}, min:{k:'f'}, max:{k:'f'}, sum:{k:'f'},
+  input:{k:'f',v:['int(input())','input()','list(map(int, input().split()))']},
+  int:{k:'f'}, str:{k:'f'}, list:{k:'f'}, dict:{k:'f'}, set:{k:'f'}, tuple:{k:'f'}, float:{k:'f'}, abs:{k:'f'}, zip:{k:'f'}, map:{k:'f'}, any:{k:'f'}, all:{k:'f'}, reversed:{k:'f'}, isinstance:{k:'f'},
+  append:{k:'m'}, pop:{k:'m'}, join:{k:'m'}, split:{k:'m'}, get:{k:'m'}, add:{k:'m'}, popleft:{k:'m'},
+  def:{k:'k',v:['def ¦():\n    ','def ¦(self):\n    ','def __init__(self¦):\n    ']},
+  for:{k:'k',v:['for i in range(¦):\n    ','for x in ¦:\n    ','for i, x in enumerate(¦):\n    ','for i in range(len(¦)):\n    ']},
+  if:{k:'k',v:['if ¦:\n    ','if ¦:\n    \nelse:\n    ','if not ¦:\n    ','if ¦ is None:\n    ']},
+  elif:{k:'k',v:['elif ¦:\n    ']},
+  else:{k:'c',t:'else:'},
+  while:{k:'k',v:['while ¦:\n    ','while True:\n    ','while lo <= hi:\n    ','while stack:\n    ']},
+  return:{k:'k',v:['return ¦','return None','return True','return False','return -1']},
+  import:{k:'k',v:['import ¦','from ¦ import ','from collections import ¦','import heapq']},
+  class:{k:'k',v:['class ¦:\n    def __init__(self):\n        ']},
+  try:{k:'c',t:'try:',v:['try:\n    ¦\nexcept Exception as e:\n    ']},
+  except:{k:'k'}, finally:{k:'c',t:'finally:'},
+  in:{k:'k'}, not:{k:'k'}, and:{k:'k'}, or:{k:'k'}, is:{k:'k'}, lambda:{k:'k'}, from:{k:'k'}, with:{k:'k'}, del:{k:'k'}, assert:{k:'k'}, yield:{k:'k'}, raise:{k:'k'},
+  self:{k:'w'}, None:{k:'w'}, True:{k:'w'}, False:{k:'w'}, pass:{k:'w'}, break:{k:'w'}, continue:{k:'w'}
+};
+const SEED = ['print','def','for','in','range','if','return','len','while','else','elif','import','class','self','append','None','True','False','not','and','or','pass','break','continue','enumerate','sorted','min','max','sum','input','int','str','list','dict','set','tuple','lambda','try','except','from','with','is','zip','abs','pop','join','split','add','get','popleft','float','map','any','all','reversed','isinstance','del','assert','yield','raise','finally'];
+const USE = 'onedsa-use';
+let LEARN = {}, learnVer = 0, smartSig = '';
+try { LEARN = JSON.parse(localStorage.getItem(USE) || '{}') || {}; } catch (e) { LEARN = {}; }
+function score(n){ const i = SEED.indexOf(n); return (i < 0 ? 0 : 40 - i * 0.5) + (LEARN[n] || 0); }
+function recordUse(n){ LEARN[n] = (LEARN[n] || 0) + 1; learnVer++; smartSig = ''; try { localStorage.setItem(USE, JSON.stringify(LEARN)); } catch (e) {} }
+function curPrefix(){
+  const s = ed.selectionStart; if (s !== ed.selectionEnd) return '';
+  const m = /[A-Za-z_][A-Za-z0-9_]*$/.exec(ed.value.slice(Math.max(0, s - 40), s));
+  return m ? m[0] : '';
+}
+function codeIds(){
+  const c = {}; (ed.value.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).forEach(w => { if (w.length >= 2 && !WT[w]) c[w] = (c[w] || 0) + 1; });
+  return c;
+}
+function smartList(pre){
+  if (!pre) return SEED.slice().sort((a, b) => score(b) - score(a));
+  const p = pre.toLowerCase(), ids = codeIds();
+  const pool = SEED.concat(Object.keys(ids)).filter(w => w.toLowerCase().startsWith(p) && w !== pre);
+  return [...new Set(pool)].sort((a, b) => (score(b) + (ids[b] || 0) * 0.3) - (score(a) + (ids[a] || 0) * 0.3)).slice(0, 14);
+}
+function updateSmart(){
+  const row = document.getElementById('smartRow'); if (!row || kb.hidden) return;
+  const pre = curPrefix(), sig = pre ? pre + '|' + ed.value.length : '|' + learnVer;
+  if (sig === smartSig) return; smartSig = sig;
+  let list = smartList(pre), hot = !!pre && list.length > 0;
+  if (!list.length) { list = smartList(''); hot = false; }
+  row.innerHTML = list.map((n, i) => {
+    const w = WT[n] || {k: 'id'}, lab = w.k === 'f' ? n + '()' : (w.k === 'm' && !pre ? '.' + n + '()' : (w.k === 'm' ? n + '()' : n));
+    return `<button class="k sug ${w.v ? 'hasvar' : ''} ${hot && i === 0 ? 'hot' : ''}" data-w="${esc(n)}">${esc(lab)}</button>`;
+  }).join('');
+  row.scrollLeft = 0;
+}
+function applyWord(n){
+  const w = WT[n] || {k: 'id'}, pre = curPrefix(); let ins, back = 0;
+  if (w.k === 'f') { ins = n + '()'; back = 1; }
+  else if (w.k === 'm') { ins = (pre ? '' : '.') + n + '()'; back = 1; }
+  else if (w.k === 'k') ins = (!pre && ['in', 'and', 'or', 'is'].includes(n)) ? ' ' + n + ' ' : n + ' ';
+  else if (w.k === 'c') ins = w.t || n + ':';
+  else ins = n;
+  ed.focus({preventScroll: true});
+  const s = ed.selectionStart, e = ed.selectionEnd;
+  if (pre && s === e) ed.setRangeText(ins, s - pre.length, s, 'end'); else ed.setRangeText(ins, s, e, 'end');
+  const pos = ed.selectionStart - back; ed.setSelectionRange(pos, pos); changed();
+  if (WT[n]) recordUse(n);
+}
+function insertTemplate(tpl){
+  ed.focus({preventScroll: true});
+  const pre = curPrefix(), s = ed.selectionStart, e = ed.selectionEnd, v = ed.value;
+  const ls = s === 0 ? 0 : v.lastIndexOf('\n', s - 1) + 1, indent = (v.slice(ls, s).match(/^ */) || [''])[0];
+  let t = tpl.split('\n').map((l, i) => i ? indent + l : l).join('\n');
+  const m = t.indexOf('¦'); t = t.replace('¦', '');
+  const from = (pre && s === e) ? s - pre.length : s;
+  ed.setRangeText(t, from, e, 'end');
+  const pos = m < 0 ? ed.selectionStart : from + m; ed.setSelectionRange(pos, pos); changed();
+}
+const SNIPS = [
+  ['Output and input', [['print', 'print(¦)'], ['print with f-string', 'print(f"¦")'], ['read a number', 'n = int(input())'], ['read a list of numbers', 'nums = list(map(int, input().split()))'], ['read a line of text', 's = input()']]],
+  ['Loops', [['for in range', 'for i in range(¦):\n    '], ['for over a list', 'for x in ¦:\n    '], ['for with index', 'for i, x in enumerate(¦):\n    '], ['while', 'while ¦:\n    '], ['two pointers loop', 'lo, hi = 0, len(¦) - 1\nwhile lo < hi:\n    ']]],
+  ['If and else', [['if', 'if ¦:\n    '], ['if / else', 'if ¦:\n    \nelse:\n    '], ['if / elif / else', 'if ¦:\n    \nelif :\n    \nelse:\n    ']]],
+  ['Functions and classes', [['function', 'def ¦():\n    '], ['function with return', 'def ¦(nums):\n    \n    return '], ['class', 'class ¦:\n    def __init__(self):\n        ']]],
+  ['Data structures', [['empty list', 'result = []'], ['dictionary count', 'count = {}\nfor x in ¦:\n    count[x] = count.get(x, 0) + 1'], ['stack', 'stack = []\nstack.append(¦)\nstack.pop()'], ['queue (deque)', 'from collections import deque\nq = deque([¦])\nq.popleft()'], ['min-heap', 'import heapq\nheap = []\nheapq.heappush(heap, ¦)\nheapq.heappop(heap)'], ['set', 'seen = set()\nseen.add(¦)'], ['2D grid', 'grid = [[0] * ¦ for _ in range(rows)]']]],
+  ['Useful tricks', [['list comprehension', '[x for x in ¦]'], ['sort with key', 'sorted(¦, key=lambda x: x)'], ['swap two values', 'a, b = b, a'], ['try / except', 'try:\n    ¦\nexcept Exception as e:\n    print(e)']]]
+];
+function openSnips(){
+  let h = '', i = 0;
+  SNIPS.forEach(g => { h += `<div class="snipg">${esc(g[0])}</div>`; g[1].forEach(it => { h += `<button class="opt" data-sh="snip" data-i="${i++}"><span><b>${esc(it[0])}</b><code class="pv">${esc(it[1].replace('¦', ''))}</code></span></button>`; }); });
+  openSheet('Code snippets', h);
+}
+function flatSnip(i){ let n = 0; for (const g of SNIPS) for (const it of g[1]) { if (n++ === i) return it[1]; } return ''; }
+
+let varPop = null, longTimer = null, longFired = false;
+function closePop(){ if (varPop) { varPop.remove(); varPop = null; } }
+function showVars(btn){
+  const n = btn.dataset.w, w = WT[n]; if (!w || !w.v) return;
+  closePop(); longFired = true;
+  const p = document.createElement('div'); p.className = 'varpop';
+  p.innerHTML = `<div class="vh">${esc(n)} → quick versions</div>` + w.v.map((t, i) => `<button data-vi="${i}">${esc(t.replace('¦', '').replace(/\n {4}/g, ' ⏎ ').replace(/\n/g, ' ⏎ '))}</button>`).join('');
+  document.body.appendChild(p); varPop = p;
+  const r = btn.getBoundingClientRect(), pr = p.getBoundingClientRect();
+  p.style.left = Math.max(8, Math.min(innerWidth - pr.width - 8, r.left)) + 'px';
+  p.style.top = Math.max(8, r.top - pr.height - 8) + 'px';
+  p.addEventListener('mousedown', e => e.preventDefault());
+  p.addEventListener('click', e => { const b = e.target.closest('[data-vi]'); if (!b) return; const t = w.v[+b.dataset.vi]; closePop(); insertTemplate(t); recordUse(n); });
+}
+document.addEventListener('pointerdown', e => { if (varPop && !varPop.contains(e.target)) closePop(); }, true);
+
 function buildKb(){
   const key = (label, data, cls = '') => `<button class="k ${cls}" data-k="${esc(data)}">${esc(label)}</button>`;
   const letters = r => [...r].map(c => `<button class="k letter" data-k="${c}">${shift ? c.toUpperCase() : c}</button>`).join('');
-  let h = '<div class="krow scroll"><button class="k chip2" data-f="hidekb" aria-label="Hide keyboard">⌄</button>' +
-    CHIPS.map(c => `<button class="k chip2 ${c[2] === 'kwd' || c[3] === 'kwd' ? 'kwd' : ''}" data-ins="${esc(c[1])}" data-back="${typeof c[2] === 'number' ? c[2] : 0}">${esc(c[0])}</button>`).join('') + '</div>';
+  let h = '<div class="krow"><button class="k chip2" data-f="hidekb" aria-label="Hide keyboard">⌄</button><button class="k snip" data-f="snips">⚡ Snippets</button><div id="smartRow" class="krow"></div></div>';
+  h += '<div class="krow scroll">' + CHIPS.map(c => `<button class="k chip2" data-ins="${esc(c[1])}" data-back="${typeof c[2] === 'number' ? c[2] : 0}">${esc(c[0])}</button>`).join('') + '</div>';
   h += '<div class="krow">' + [...'()[]{}:,._'].map(c => key(c, c, 'sym')).join('') + '</div>';
   h += '<div class="krow">' + [...'=+-*/%<>!#'].map(c => key(c, c, 'sym')).join('') + '</div>';
   h += '<div class="krow">' + [...'1234567890'].map(c => key(c, c, 'sym')).join('') + '</div>';
@@ -1264,13 +1394,14 @@ function buildKb(){
   h += '<div class="krow"><span style="flex:.5"></span>' + letters('asdfghjkl') + '<span style="flex:.5"></span></div>';
   h += '<div class="krow"><button class="k fn w15 ' + (shift ? 'act' : '') + '" data-f="shift">' + (shift === 2 ? '⇪' : '⇧') + '</button>' + letters('zxcvbnm') + '<button class="k fn w15" data-f="bs" aria-label="Backspace">⌫</button></div>';
   h += '<div class="krow"><button class="k fn w15" data-f="tab">Tab</button><button class="k fn" data-f="left" aria-label="Left">◀</button><button class="k fn" data-f="up" aria-label="Up">▲</button><button class="k w4" data-k=" ">space</button><button class="k fn" data-f="down" aria-label="Down">▼</button><button class="k fn" data-f="right" aria-label="Right">▶</button><button class="k enter w15" data-f="enter">Enter ⏎</button></div>';
-  kb.innerHTML = h;
+  kb.innerHTML = h; smartSig = ''; updateSmart();
 }
 function updateKb(){
   const onType = state.screen === 'type';
   kb.hidden = !(onType && useCustom && !kbHidden);
   $('#kbShow').hidden = !(onType && useCustom && kbHidden);
   if (!kb.hidden && !kb.dataset.built) { buildKb(); kb.dataset.built = '1'; }
+  updateSmart();
 }
 $('#kbShow').addEventListener('mousedown', e => e.preventDefault());
 $('#kbShow').onclick = () => { kbHidden = false; updateKb(); };
@@ -1278,13 +1409,18 @@ let bsTimer, bsRepeat;
 function stopBs(){ clearTimeout(bsTimer); clearInterval(bsRepeat); }
 kb.addEventListener('mousedown', e => e.preventDefault());
 kb.addEventListener('pointerdown', e => {
-  const b = e.target.closest('[data-f="bs"]'); if (!b) return;
-  e.preventDefault(); backspace();
-  bsTimer = setTimeout(() => { bsRepeat = setInterval(backspace, 70); }, 420);
+  longFired = false;
+  const b = e.target.closest('[data-f="bs"]');
+  if (b) { e.preventDefault(); backspace(); bsTimer = setTimeout(() => { bsRepeat = setInterval(backspace, 70); }, 420); return; }
+  const w = e.target.closest('[data-w]');
+  if (w && WT[w.dataset.w] && WT[w.dataset.w].v) { longFired = false; clearTimeout(longTimer); longTimer = setTimeout(() => showVars(w), 380); }
 });
-['pointerup','pointercancel','pointerleave'].forEach(ev => kb.addEventListener(ev, stopBs));
+['pointerup','pointercancel','pointerleave'].forEach(ev => kb.addEventListener(ev, () => { stopBs(); clearTimeout(longTimer); }));
+kb.addEventListener('contextmenu', e => e.preventDefault());
 kb.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (longFired) { longFired = false; return; }
+  if (b.dataset.w !== undefined) { applyWord(b.dataset.w); return; }
   if (b.dataset.ins !== undefined) { insert(b.dataset.ins, +b.dataset.back || 0); return; }
   if (b.dataset.k !== undefined) {
     let k = b.dataset.k;
@@ -1298,6 +1434,7 @@ kb.addEventListener('click', e => {
     lastShiftTap = now; buildKb();
   }
   else if (f === 'hidekb') { kbHidden = true; updateKb(); }
+  else if (f === 'snips') openSnips();
   else if (f === 'tab') insert('    ');
   else if (f === 'enter') enter();
   else if (f === 'left') moveH(-1);
@@ -1305,6 +1442,48 @@ kb.addEventListener('click', e => {
   else if (f === 'up') moveV(-1);
   else if (f === 'down') moveV(1);
 });
+
+/* ---------- run Python (works inside the OneDSA app) ---------- */
+const STDIN = 'onedsa-stdin';
+let pyW = null, runId = 0, runTimer = null, runStart = 0, running = false;
+function killPy(){ if (pyW) { try { pyW.terminate(); } catch (e) {} pyW = null; } clearTimeout(runTimer); running = false; }
+function runUI(){
+  let sin = ''; try { sin = localStorage.getItem(STDIN) || ''; } catch (e) {}
+  openSheet('Run Python',
+    `<div id="runSt">Ready</div><pre class="py" id="runOut"></pre>
+     <div class="rbtns"><button class="btn" id="runGo" style="margin-top:0">▶ Run again</button><button class="btn" id="runCopy" style="margin-top:0;background:#eee;color:#000">Copy output</button></div>
+     <details style="margin-top:14px"><summary style="font-weight:800;font-size:15px">Input for input() (one line for each call)</summary><textarea id="runIn" placeholder="Example:\n5\n1 2 3 4 5" spellcheck="false">${esc(sin)}</textarea></details>`);
+  $('#runGo').onclick = () => { if (running) { killPy(); setSt('Stopped'); $('#runGo').textContent = '▶ Run again'; } else startRun(); };
+  $('#runCopy').onclick = () => copyText($('#runOut').textContent);
+}
+function setSt(t){ const s = $('#runSt'); if (s) s.textContent = t; }
+function addOut(t){ const o = $('#runOut'); if (o) { o.textContent += t; o.scrollTop = o.scrollHeight; } }
+function startRun(){
+  const code = ed.value; if (!code.trim()) { toast('Write some code first'); return; }
+  const inp = $('#runIn'); const stdin = inp ? inp.value : '';
+  try { localStorage.setItem(STDIN, stdin); } catch (e) {}
+  const o = $('#runOut'); if (o) o.textContent = '';
+  killPy();
+  const id = ++runId; running = true; runStart = 0;
+  const g = $('#runGo'); if (g) g.textContent = '■ Stop';
+  setSt('Starting…');
+  const fail = msg => { if (id !== runId) return; killPy(); setSt('Cannot run here'); addOut(msg); const gg = $('#runGo'); if (gg) gg.textContent = '▶ Run again'; };
+  try { pyW = new Worker('pyworker.js'); } catch (e) { fail('Python runs inside the OneDSA Android app.\nThis page cannot start it. Install the OneDSA APK to run your code.\n'); return; }
+  pyW.onerror = () => fail('Python runs inside the OneDSA Android app.\nThis page cannot start it. Install the OneDSA APK to run your code.\n');
+  pyW.onmessage = ev => {
+    const m = ev.data; if (!m || m.id !== id) return;
+    if (m.type === 'status') setSt(m.text);
+    else if (m.type === 'running') {
+      runStart = Date.now(); setSt('Running…');
+      runTimer = setTimeout(() => { if (id !== runId) return; killPy(); setSt('Stopped after 10 seconds'); addOut('\n⏱ Stopped: the code ran for more than 10 seconds. Check for an endless loop.\n'); const gg = $('#runGo'); if (gg) gg.textContent = '▶ Run again'; }, 10000);
+    }
+    else if (m.type === 'out') addOut(m.text);
+    else if (m.type === 'done') { clearTimeout(runTimer); running = false; setSt('Finished in ' + ((Date.now() - runStart) / 1000).toFixed(2) + ' s'); const gg = $('#runGo'); if (gg) gg.textContent = '▶ Run again'; }
+    else if (m.type === 'err') { clearTimeout(runTimer); running = false; setSt('Error'); addOut(m.text); const gg = $('#runGo'); if (gg) gg.textContent = '▶ Run again'; }
+  };
+  pyW.postMessage({id, code, stdin});
+}
+$('#bRun').onclick = () => { runUI(); startRun(); };
 
 /* ---------- init ---------- */
 (function init(){

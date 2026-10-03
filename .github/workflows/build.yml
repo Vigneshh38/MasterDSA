@@ -19,6 +19,11 @@ jobs:
           java-version: 17
       - name: Install
         run: npm install
+      - name: Bundle Python (Pyodide) so code runs offline
+        run: |
+          mkdir -p www/pyodide
+          cp node_modules/pyodide/pyodide.js node_modules/pyodide/pyodide.asm.js node_modules/pyodide/pyodide.asm.wasm node_modules/pyodide/python_stdlib.zip node_modules/pyodide/pyodide-lock.json www/pyodide/
+          ls -la www/pyodide
       - name: Add Android project
         run: npx cap add android
       - name: Use the logo as app icon
@@ -38,11 +43,11 @@ jobs:
           ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: PatternCoach-apk
+          name: OneDSA-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk PatternCoach.apk
-          gh release create "v1.${{ github.run_number }}" PatternCoach.apk --title "Pattern Coach v1.${{ github.run_number }}" --notes "Install PatternCoach.apk on your Android phone."
+          cp android/app/build/outputs/apk/debug/app-debug.apk OneDSA.apk
+          gh release create "v2.${{ github.run_number }}" OneDSA.apk --title "OneDSA v2.${{ github.run_number }}" --notes "Install OneDSA.apk on your Android phone."
