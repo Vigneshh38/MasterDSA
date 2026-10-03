@@ -1,0 +1,7 @@
+{
+  "appId": "com.vignesh.patterncoach",
+  "appName": "Pattern Coach",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "backgroundColor": "#ffffff"
+}
